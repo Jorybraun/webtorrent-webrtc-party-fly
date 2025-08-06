@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebTorrent Party</title>
+    <script src="https://cdn.jsdelivr.net/npm/webtorrent@2.1.22/webtorrent.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 900px;
+            width: 95%;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .content {
+            padding: 20px;
+        }
+        
+        .auth-form, .main-app {
+            display: none;
+        }
+        
+        .auth-form.active, .main-app.active {
+            display: block;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input[type="password"], input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        
+        .status {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+        }
+        
+        .video-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        video {
+            width: 100%;
+            max-width: 800px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .chat {
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .chat-messages {
+            margin-bottom: 10px;
+        }
+        
+        .chat-input {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chat-input input {
+            flex: 1;
+        }
+        
+        .peers-info {
+            background: #e8f5e8;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+            }
+            
+            .chat-input {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎬 WebTorrent Party</h1>
+            <p>Watch videos together with friends</p>
+        </div>
+        
+        <div class="content">
+            <!-- Authentication Form -->
+            <div class="auth-form active">
+                <div class="form-group">
+                    <label for="password">Enter Room Password:</label>
+                    <input type="password" id="password" placeholder="Enter password to join">
+                </div>
+                <button class="btn" onclick="authenticate()">Join Party</button>
+                <div class="error" id="auth-error"></div>
+            </div>
+            
+            <!-- Main Application -->
+            <div class="main-app">
+                <div class="status">
+                    <div>Status: <span id="connection-status">Connecting...</span></div>
+                    <div class="peers-info">Connected peers: <span id="peer-count">0</span></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="magnet-input">Magnet Link or Torrent File:</label>
+                    <input type="text" id="magnet-input" placeholder="Paste magnet link here...">
+                </div>
+                
+                <div class="controls">
+                    <button class="btn" onclick="loadTorrent()">Load Video</button>
+                    <button class="btn" onclick="playPause()" id="play-btn" disabled>Play</button>
+                    <button class="btn" onclick="syncVideo()">Sync with Others</button>
+                </div>
+                
+                <div class="video-container">
+                    <video id="video-player" controls style="display: none;"></video>
+                    <div id="loading-message" style="display: none;">Loading torrent...</div>
+                </div>
+                
+                <div class="chat">
+                    <div class="chat-messages" id="chat-messages"></div>
+                    <div class="chat-input">
+                        <input type="text" id="chat-input" placeholder="Type a message..." onkeypress="handleChatKeypress(event)">
+                        <button class="btn" onclick="sendChat()">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let client = null;
+        let peers = new Map();
+        let currentTorrent = null;
+        let isHost = false;
+        let lastSyncTime = 0;
+        
+        // WebSocket connection
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}`);
+            
+            ws.onopen = () => {
+                document.getElementById('connection-status').textContent = 'Connected';
+                console.log('WebSocket connected');
+            };
+            
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleWebSocketMessage(message);
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('connection-status').textContent = 'Disconnected';
+                console.log('WebSocket disconnected');
+                setTimeout(connectWebSocket, 3000); // Reconnect after 3 seconds
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('connection-status').textContent = 'Error';
+            };
+        }
+        
+        function handleWebSocketMessage(message) {
+            switch (message.type) {
+                case 'signal':
+                    handleSignal(message.from, message.data);
+                    break;
+                    
+                case 'video-update':
+                    if (!isHost) {
+                        handleVideoSync(message.data);
+                    }
+                    break;
+                    
+                case 'chat':
+                    displayChatMessage(message.from, message.data);
+                    break;
+                    
+                case 'room-state':
+                    handleRoomState(message.data);
+                    break;
+                    
+                case 'peer-disconnected':
+                    handlePeerDisconnect(message.clientId);
+                    break;
+            }
+        }
+        
+        // Authentication
+        async function authenticate() {
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('auth-error');
+            
+            try {
+                const response = await fetch('/auth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ password }),
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.querySelector('.auth-form').classList.remove('active');
+                    document.querySelector('.main-app').classList.add('active');
+                    connectWebSocket();
+                    initializeWebTorrent();
+                } else {
+                    errorDiv.textContent = 'Invalid password. Please try again.';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error. Please try again.';
+                console.error('Auth error:', error);
+            }
+        }
+        
+        // WebTorrent initialization
+        function initializeWebTorrent() {
+            client = new WebTorrent();
+            
+            client.on('error', (err) => {
+                console.error('WebTorrent error:', err);
+                alert('WebTorrent error: ' + err.message);
+            });
+        }
+        
+        // Load torrent
+        function loadTorrent() {
+            const magnetInput = document.getElementById('magnet-input');
+            const magnetUri = magnetInput.value.trim();
+            
+            if (!magnetUri) {
+                alert('Please enter a magnet link');
+                return;
+            }
+            
+            document.getElementById('loading-message').style.display = 'block';
+            
+            if (currentTorrent) {
+                currentTorrent.destroy();
+            }
+            
+            client.add(magnetUri, (torrent) => {
+                currentTorrent = torrent;
+                isHost = true; // Person who loads becomes host
+                
+                // Find the largest video file
+                const file = torrent.files.find(file => 
+                    file.name.endsWith('.mp4') || 
+                    file.name.endsWith('.mkv') || 
+                    file.name.endsWith('.avi') ||
+                    file.name.endsWith('.webm')
+                );
+                
+                if (file) {
+                    const video = document.getElementById('video-player');
+                    file.renderTo(video);
+                    
+                    video.style.display = 'block';
+                    document.getElementById('loading-message').style.display = 'none';
+                    document.getElementById('play-btn').disabled = false;
+                    
+                    // Set up video event listeners
+                    video.addEventListener('play', () => sendVideoUpdate('play'));
+                    video.addEventListener('pause', () => sendVideoUpdate('pause'));
+                    video.addEventListener('seeked', () => sendVideoUpdate('seek'));
+                    
+                    // Notify others about the new video
+                    sendVideoUpdate('load', magnetUri);
+                } else {
+                    alert('No video file found in torrent');
+                    document.getElementById('loading-message').style.display = 'none';
+                }
+            });
+        }
+        
+        // Video controls
+        function playPause() {
+            const video = document.getElementById('video-player');
+            if (video.paused) {
+                video.play();
+            } else {
+                video.pause();
+            }
+        }
+        
+        function syncVideo() {
+            const video = document.getElementById('video-player');
+            if (video.src) {
+                sendVideoUpdate('sync');
+            }
+        }
+        
+        function sendVideoUpdate(action, magnetUri = null) {
+            const video = document.getElementById('video-player');
+            const updateData = {
+                action: action,
+                currentTime: video.currentTime,
+                isPlaying: !video.paused,
+                magnetUri: magnetUri
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'video-update',
+                    data: updateData
+                }));
+            }
+        }
+        
+        function handleVideoSync(data) {
+            const video = document.getElementById('video-player');
+            
+            if (data.action === 'load' && data.magnetUri) {
+                document.getElementById('magnet-input').value = data.magnetUri;
+                loadTorrent();
+                return;
+            }
+            
+            if (!video.src) return;
+            
+            const timeDiff = Math.abs(video.currentTime - data.currentTime);
+            
+            // Only sync if time difference is significant (more than 2 seconds)
+            if (timeDiff > 2) {
+                video.currentTime = data.currentTime;
+            }
+            
+            if (data.isPlaying && video.paused) {
+                video.play();
+            } else if (!data.isPlaying && !video.paused) {
+                video.pause();
+            }
+        }
+        
+        function handleRoomState(state) {
+            if (state.currentVideo) {
+                document.getElementById('magnet-input').value = state.currentVideo;
+            }
+        }
+        
+        // WebRTC signaling
+        function handleSignal(from, data) {
+            if (!peers.has(from)) {
+                const peer = new SimplePeer({ initiator: false });
+                peers.set(from, peer);
+                
+                peer.on('signal', (data) => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'signal',
+                            data: data
+                        }));
+                    }
+                });
+                
+                peer.on('connect', () => {
+                    console.log('Peer connected:', from);
+                    updatePeerCount();
+                });
+                
+                peer.on('close', () => {
+                    console.log('Peer disconnected:', from);
+                    peers.delete(from);
+                    updatePeerCount();
+                });
+            }
+            
+            const peer = peers.get(from);
+            peer.signal(data);
+        }
+        
+        function handlePeerDisconnect(clientId) {
+            if (peers.has(clientId)) {
+                peers.get(clientId).destroy();
+                peers.delete(clientId);
+                updatePeerCount();
+            }
+        }
+        
+        function updatePeerCount() {
+            document.getElementById('peer-count').textContent = peers.size;
+        }
+        
+        // Chat functionality
+        function sendChat() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            
+            if (message && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'chat',
+                    data: message
+                }));
+                
+                displayChatMessage('You', message);
+                input.value = '';
+            }
+        }
+        
+        function handleChatKeypress(event) {
+            if (event.key === 'Enter') {
+                sendChat();
+            }
+        }
+        
+        function displayChatMessage(from, message) {
+            const chatMessages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.innerHTML = `<strong>${from}:</strong> ${message}`;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('WebTorrent Party initialized');
+        });
+    </script>
+</body>
+</html>
